@@ -1,6 +1,6 @@
 ---
 title: "Example Manuscript Template for a Data Analysis Project"
-author: ""
+author: "Kexin Cui"
 format:
   docx:
     toc: false
@@ -48,7 +48,7 @@ author's own and don't reflect their employer.
 
 
 # Summary/Abstract
-_Write a summary of your project._
+This project uses human microbiome sequencing data as an example of complex genetics and –omics data. Microbiome data are generated from sequencing technologies and consist of multiple linked components, including microbial feature counts, taxonomic annotations, and sample metadata, which require specialized data structures and tools for analysis. Publicly available 16S rRNA sequencing data from the Human Microbiome Project will be accessed through the Bioconductor ecosystem and explored using `SummarizedExperiment` and `phyloseq` objects. The goal of this initial project stage is to assess feasibility by loading the data, performing minimal preprocessing, and conducting exploratory analyses such as se
 
 _It is recommended to use a structured abstract with Background/Methods/Results/Discussion sections._
 
@@ -58,13 +58,18 @@ _It is recommended to use a structured abstract with Background/Methods/Results/
 # Introduction 
 
 ## General Background Information
-_Provide enough background on your topic that others can understand the why and how of your analysis_ 
+Microbiome research aims to characterize microbial communities and understand how they vary across environments or host conditions. Many microbiome studies rely on sequencing technologies such as 16S rRNA amplicon sequencing, which generate high-dimensional count data that are often sparse and noisy. As a result, microbiome data analysis requires specialized workflows and tools that differ from standard analyses of simple rectangular datasets.
+
+These data are commonly categorized as genetics or –omics data. While some –omics datasets can be represented in rectangular form, they typically have many more features than samples and require preprocessing steps such as filtering, normalization, and dimension reduction. The Bioconductor project provides a comprehensive collection of R packages and standardized data structures designed specifically for genetics and –omics data analysis, making it a natural framework for microbiome research.
 
 ## Description of data and data source
-_Describe what the data is, what it contains, where it is from, etc. Eventually this might be part of a methods section._
+The data used in this project are 16S rRNA sequencing data from the Human Microbiome Project (HMP), obtained using the `HMP16SData` Bioconductor package. The unit of observation is an individual microbiome sample. For each sample, the dataset contains a high-dimensional table of microbial feature counts, a taxonomy table assigning features to taxonomic ranks (e.g., phylum and genus), and sample-level metadata describing characteristics such as body site.
+
+This dataset represents a complex data type because it is not a single rectangular data frame. Instead, it consists of multiple linked components that are stored in specialized data structures, such as `SummarizedExperiment` and `phyloseq` objects. The number of microbial features greatly exceeds the number of samples, and many features are rare or absent in most samples, motivating the use of filtering and transformation steps prior to modeling.
 
 ## Questions/Hypotheses to be addressed
-_State the research questions you plan to answer with this analysis._
+The primary question of this project is whether microbiome community structure differs across sample groups defined by available metadata, such as body site. Outcomes of interest include alpha diversity measures (e.g., Shannon diversity) that summarize within-sample diversity, as well as beta diversity measures that capture differences in community composition between samples. I hypothesize that samples from different body sites will exhibit distinct diversity patterns and will cluster separately in ordination analyses.
+
 
 To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the BibTeX file specified in the YAML header above and have the right BibTeX key. Then you can include like this:
 
@@ -96,11 +101,57 @@ knitr::include_graphics(here("assets","antigen-recognition.png"))
 
 
 ## Data acquisition
-_As applicable, explain where and how you got the data. If you directly import the data from an online source, you can combine this section with the next._
+The data were obtained directly from the Human Microbiome Project using the Bioconductor package `HMP16SData`. The V3–V5 16S rRNA amplicon dataset was imported programmatically in R using the `V35()` function, which returns the data as a `SummarizedExperiment` object containing microbial feature counts, taxonomic annotations, and sample metadata. The data were then converted to a `phyloseq` object to support microbiome-specific data handling and exploratory analysis. Programmatic data access through Bioconductor ensures reproducibility and avoids manual data downloads.
 
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+# BiocManager::install("microbiome")
+
+library(tidyverse)
+library(HMP16SData)
+library(phyloseq)
+library(vegan)
+library(microbiome)
+
+# Load Human Microbiome Project 16S data (V3–V5 region)
+se <- V35()
+ps <- as_phyloseq(se)
+
+# Basic dimensions
+nsamples(ps)
+ntaxa(ps)
+
+# Available sample metadata
+sample_variables(ps)
+```
 
 ## Data import and cleaning
-_Write code that reads in the file and cleans it so it's ready for analysis. Since this will be fairly long code for most datasets, it might be a good idea to have it in one or several R scripts. If that is the case, explain here briefly what kind of cleaning/processing you do, and provide more details and well documented code somewhere (e.g. as supplement in a paper). All materials, including files that contain code, should be commented well so everyone can follow along._
+After loading the data, several basic data checks and preprocessing steps were performed to prepare the microbiome data for exploratory analysis. Taxonomy and sample metadata were inspected to confirm successful import and consistency. Microbial features with zero total counts were removed, and rare taxa present in only a small number of samples were filtered out to reduce sparsity. Finally, raw count data were transformed to relative abundances to account for differences in sequencing depth across samples. These steps produced a cleaned dataset suitabl
+
+```{r}
+# Inspect taxonomy and metadata
+tax_table(ps)[1:5, 1:4]
+sample_data(ps)[1:5, ]
+
+# Remove taxa with zero total counts
+ps_nz <- prune_taxa(taxa_sums(ps) > 0, ps)
+
+# Filter rare taxa (present in >5 samples)
+ps_filt <- filter_taxa(ps_nz, function(x) sum(x > 0) > 5, prune = TRUE)
+
+# Transform counts to relative abundance
+ps_rel <- transform_sample_counts(ps_filt, function(x) x / sum(x))
+
+# Compare dimensions before and after filtering
+tibble(
+  stage = c("Original", "Filtered"),
+  samples = c(nsamples(ps), nsamples(ps_rel)),
+  taxa = c(ntaxa(ps), ntaxa(ps_rel))
+)
+```
 
 
 ## Statistical analysis
@@ -114,8 +165,70 @@ _Explain anything related to your statistical analyses._
 
 ## Exploratory/Descriptive analysis
 
-_Use a combination of text/tables/figures to explore and describe your data. Show the most important descriptive results here. Additional ones should go in the supplement. Even more can be in the R and Quarto files that are part of your project._
+Exploratory analyses were used to summarize key characteristics of the microbiome dataset and assess feasibility for later modeling. I first examined sequencing depth across samples to understand variability in read counts. Next, I summarized community composition by visualizing relative abundances of dominant taxonomic groups (phylum level). Finally, I computed alpha diversity (Shannon index) to describe within-sample diversity and compared it across a metadata-defined grouping variable (e.g., body subsite). These descriptive results provide a high-level overview of the data structure and major patterns without performing formal hypothesis testing.
+### Sequencing depth distribution
+```{r}
 
+tibble(library_size = sample_sums(ps_filt)) %>%
+  ggplot(aes(x = library_size)) +
+  geom_histogram(bins = 30) +
+  labs(x = "Sequencing depth (reads per sample)",
+       y = "Number of samples")
+```
+
+### Dominant taxa composition (top phyla)
+```{r}
+# Extract relative abundance matrix
+otu <- as(otu_table(ps_rel), "matrix")
+if (taxa_are_rows(ps_rel)) otu <- t(otu)
+
+# Get phylum labels
+tax <- as(tax_table(ps_rel), "matrix")
+phylum <- tax[, "PHYLUM"]
+phylum[is.na(phylum) | phylum == ""] <- "UNASSIGNED"
+
+# Collapse features to phylum level
+otu_phylum <- rowsum(t(otu), group = phylum)
+otu_phylum <- t(otu_phylum)
+
+# Plot top 10 phyla
+df <- as_tibble(otu_phylum, rownames = "SampleID") |>
+  pivot_longer(-SampleID, names_to = "PHYLUM", values_to = "RelAbund")
+
+top10 <- df |>
+  group_by(PHYLUM) |>
+  summarize(total = sum(RelAbund), .groups = "drop") |>
+  slice_max(total, n = 10) |>
+  pull(PHYLUM)
+
+df |>
+  filter(PHYLUM %in% top10) |>
+  ggplot(aes(SampleID, RelAbund, fill = PHYLUM)) +
+  geom_col() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
+  labs(x = "Samples", y = "Relative abundance")
+```
+
+Relative abundances of dominant bacterial phyla varied substantially across samples, indicating heterogeneous community composition typical of human microbiome data.
+
+### Alpha diversity (Shannon) + boxplot by group
+```{r}
+alpha <- estimate_richness(ps_filt, measures = "Shannon") %>%
+  rownames_to_column("SampleID")
+
+meta <- as(sample_data(ps_filt), "data.frame") %>%
+  rownames_to_column("SampleID")
+
+df_alpha <- left_join(alpha, meta, by = "SampleID")
+
+GROUP_VAR <- "HMP_BODY_SUBSITE"  # change if needed
+
+df_alpha %>%
+  ggplot(aes(x = .data[[GROUP_VAR]], y = Shannon)) +
+  geom_boxplot() +
+  labs(x = GROUP_VAR, y = "Shannon diversity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
 @tbl-summarytable shows a summary of the data.
 
