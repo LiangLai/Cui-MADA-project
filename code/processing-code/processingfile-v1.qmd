@@ -20,11 +20,18 @@ See the other Quarto file for my currently preferred approach of pulling code fr
 Load needed packages. make sure they are installed.
 
 ```{r}
-library(readxl) #for loading Excel files
-library(dplyr) #for data processing/cleaning
-library(tidyr) #for data processing/cleaning
-library(skimr) #for nice visualization of data 
-library(here) #to set paths
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+# BiocManager::install("microbiome")
+
+library(tidyverse)
+library(HMP16SData)
+library(phyloseq)
+library(vegan)
+library(microbiome)
+library(here)
 ```
 
 
@@ -35,10 +42,13 @@ package::function() that's not required one could just call the function specify
 but it adds typing. You can do it either way.
 
 ```{r}
-# path to data
-# note the use of the here() package and not absolute paths
-data_location <- here::here("data","raw-data","exampledata.xlsx")
-rawdata <- readxl::read_excel(data_location)
+
+
+# Load Human Microbiome Project 16S data (V3–V5 region)
+se <- V35()
+ps <- as_phyloseq(se)
+
+
 ```
 
 
@@ -47,18 +57,12 @@ rawdata <- readxl::read_excel(data_location)
 First we can look at the codebook
 
 ```{r}
-codebook <- readxl::read_excel(data_location, sheet ="Codebook")
-print(codebook)
-```
+# Basic dimensions
+nsamples(ps)
+ntaxa(ps)
 
-
-Several ways of looking at the data
-
-```{r}
-dplyr::glimpse(rawdata)
-summary(rawdata)
-head(rawdata)
-skimr::skim(rawdata)
+# Available sample metadata
+sample_variables(ps)
 ```
 
 
@@ -67,57 +71,26 @@ skimr::skim(rawdata)
 
 By inspecting the data as done above, we find some problems that need addressing:
 
-First, there is an entry for height which says "sixty" instead of a number. 
-Does that mean it should be a numeric 60? It somehow doesn't make sense since the weight is 60kg, which can't happen for a 60cm person (a baby).
-Since we don't know how to fix this, we might decide to remove the person. This "sixty" entry also turned all Height entries into characters instead of numeric. That conversion to character also means that our summary function isn't very meaningful. So let's fix that first.
-
 ```{r}
-d1 <- rawdata %>% dplyr::filter( Height != "sixty" ) %>% 
-                  dplyr::mutate(Height = as.numeric(Height))
-skimr::skim(d1)
-hist(d1$Height)
-```
+# Inspect taxonomy and metadata
+tax_table(ps)[1:5, 1:4]
+sample_data(ps)[1:5, ]
 
-Now we see that there is one person with a height of 6. That could be a typo, or someone mistakenly entered their height in feet. We assume that we know it was a mistaken entry as feet and convert to centimeters. Depending on your knowledge of the data, you might instead want to remove this person.
+# Remove taxa with zero total counts
+ps_nz <- prune_taxa(taxa_sums(ps) > 0, ps)
 
-```{r}
-d2 <- d1 %>% dplyr::mutate( Height = replace(Height, Height=="6",round(6*30.48,0)) )
-skimr::skim(d2)
-```
+# Filter rare taxa (present in >5 samples)
+ps_filt <- filter_taxa(ps_nz, function(x) sum(x > 0) > 5, prune = TRUE)
 
-Height values seem ok now.
+# Transform counts to relative abundance
+ps_rel <- transform_sample_counts(ps_filt, function(x) x / sum(x))
 
-Now let's look at the `Weight` variable. There is a person with weight of 7000, which is impossible, and one person with missing weight.
-To be able to analyze the data, we'll remove those individuals as well.
-
-```{r}
-d3 <- d2 %>%  dplyr::filter(Weight != 7000) %>% tidyr::drop_na()
-skimr::skim(d3)
-```
-
-Now checking the `Gender` variable. Gender should be a categorical/factor variable but is loaded as character. We can fix that with simple base R code to mix things up.
-
-```{r}
-d3$Gender <- as.factor(d3$Gender)  
-skimr::skim(d3)
-```
-
-
-Now we see that there is another NA, but it's not `NA` from R, instead it was loaded as character and is now considered as a category.
-We'll proceed here by removing that individual with that NA entry. Since this keeps an empty category for Gender, I'm also using droplevels() to get rid of it.
-
-```{r}
-d4 <- d3 %>% dplyr::filter( !(Gender %in% c("NA","N")) ) %>% droplevels()
-skimr::skim(d4)
-```
-
-
-All done, data is clean now. 
-
-Let's assign at the end to some final variable, this makes it easier to add further cleaning steps above.
-
-```{r}
-processeddata <- d4
+# Compare dimensions before and after filtering
+tibble(
+  stage = c("Original", "Filtered"),
+  samples = c(nsamples(ps), nsamples(ps_rel)),
+  taxa = c(ntaxa(ps), ntaxa(ps_rel))
+)
 ```
 
 
@@ -131,8 +104,8 @@ See here for some suggestions on how to store your processed data:
 http://www.sthda.com/english/wiki/saving-data-into-r-data-format-rds-and-rdata
 
 ```{r}
-save_data_location <- here::here("data","processed-data","processeddata.rds")
-saveRDS(processeddata, file = save_data_location)
+saveRDS(ps_filt, here::here("data","processed-data","ps_filt.rds"))
+saveRDS(ps_rel,  here::here("data","processed-data","ps_rel.rds"))
 ```
 
 
