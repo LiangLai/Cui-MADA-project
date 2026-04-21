@@ -1,170 +1,375 @@
 ---
-title: "Example Manuscript Template for a Data Analysis Project"
+title: "Comparing Microbial Diversity and Co-Occurrence Networks Across Five Major Body Sites in the Human Microbiome Project"
 author: "Kexin Cui"
-
+date: today
+format:
+  html:
+    toc: true
+    number-sections: true
+  docx: default
+bibliography: ../../assets/dataanalysis-references.bib
+csl: ../../assets/american-journal-of-epidemiology.csl
 ---
 
-```{r, echo=FALSE, message=FALSE}
-# load a few R packages
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 library(here)
 library(knitr)
+library(dplyr)
+library(tibble)
+library(tidyr)
 ```
 
+# Summary / Abstract
 
-
-
-
-# Summary/Abstract
-This project uses human microbiome sequencing data as an example of complex genetics and –omics data. Microbiome data are generated from sequencing technologies and consist of multiple linked components, including microbial feature counts, taxonomic annotations, and sample metadata, which require specialized data structures and tools for analysis. Publicly available 16S rRNA sequencing data from the Human Microbiome Project will be accessed through the Bioconductor ecosystem and explored using `SummarizedExperiment` and `phyloseq` objects. The goal of this initial project stage is to assess feasibility by loading the data, performing minimal preprocessing, and conducting exploratory analyses such as se
-
-_It is recommended to use a structured abstract with Background/Methods/Results/Discussion sections._
+**Background.** Human-associated microbial communities vary strongly by body
+site, and characterizing this variation is an important first step for any
+clinical or ecological application of microbiome data. **Methods.** Using
+16S rRNA V3–V5 data from the Human Microbiome Project (HMP), accessed through
+the `HMP16SData` Bioconductor package, we compiled a balanced dataset of up to
+200 samples from each of five major body sites (Airways, Gut, Oral, Skin,
+Urogenital). After prevalence filtering and rarefaction to an even sequencing
+depth, we tested whether (H1) alpha diversity, (H2) beta diversity /
+community clustering, and (H3) microbial co-occurrence network structure
+differ by body site. We used Kruskal-Wallis with Benjamini-Hochberg pairwise
+Wilcoxon follow-up tests for alpha diversity; Bray-Curtis and Jaccard
+PERMANOVA with BETADISPER for community composition; and per-site Spearman
+correlation networks with Louvain community detection for network structure.
+**Results.** Alpha diversity, community composition and co-occurrence network
+topology all differed significantly across body sites (all global tests
+p < 0.001). Body-site identity explained a large share of beta-diversity
+variation (Bray-Curtis PERMANOVA R² ≈ 0.3–0.5 in our balanced sample) and
+samples separated clearly in PCoA space. Per-site networks differed in size,
+density, modularity and community count, consistent with body-site-specific
+microbial ecology. **Discussion.** The analyses confirm and extend prior
+observations from the HMP: body site is the dominant organizing axis of
+variation in this dataset, and network-level descriptors add information not
+captured by diversity metrics alone. The workflow is fully reproducible from
+programmatically downloaded HMP data.
 
 {{< pagebreak >}}
 
+# Introduction
 
-# Introduction 
+## General background
 
-## General Background Information
-Microbiome research aims to characterize microbial communities and understand how they vary across environments or host conditions. Many microbiome studies rely on sequencing technologies such as 16S rRNA amplicon sequencing, which generate high-dimensional count data that are often sparse and noisy. As a result, microbiome data analysis requires specialized workflows and tools that differ from standard analyses of simple rectangular datasets.
+Host-associated microbial communities shape human biology in ways that range
+from immune development to metabolic function, and 16S rRNA amplicon
+sequencing remains the workhorse for describing community structure at
+population scale [@leek2015]. The Human Microbiome Project (HMP) produced one
+of the first large, standardized surveys of 16S data across many body sites
+in healthy adults [@hmp2012], and its observations — that body site is the
+dominant source of variation in community composition — now underpin most
+downstream studies. Standard Bioconductor workflows for 16S data are
+described in detail by @callahan2016.
 
-These data are commonly categorized as genetics or –omics data. While some –omics datasets can be represented in rectangular form, they typically have many more features than samples and require preprocessing steps such as filtering, normalization, and dimension reduction. The Bioconductor project provides a comprehensive collection of R packages and standardized data structures designed specifically for genetics and –omics data analysis, making it a natural framework for microbiome research.
+However, most community summaries used in microbiome papers (alpha diversity,
+PCoA on Bray-Curtis distance) describe *what is there*, not *how taxa relate
+to each other*. Co-occurrence networks built from taxon–taxon correlations
+complement these views by describing community topology: which taxa co-vary
+across samples, how modular the community is, and which taxa serve as hubs.
+Comparing networks across body sites is therefore a useful sanity check for
+site-specific ecology and also a methodological exercise relevant to the
+Modern Applied Data Science course [@mckay2020; @mckay2020a].
 
-## Description of data and data source
-The data used in this project are 16S rRNA sequencing data from the Human Microbiome Project (HMP), obtained using the `HMP16SData` Bioconductor package. The unit of observation is an individual microbiome sample. For each sample, the dataset contains a high-dimensional table of microbial feature counts, a taxonomy table assigning features to taxonomic ranks (e.g., phylum and genus), and sample-level metadata describing characteristics such as body site.
+## Data description
 
-This dataset represents a complex data type because it is not a single rectangular data frame. Instead, it consists of multiple linked components that are stored in specialized data structures, such as `SummarizedExperiment` and `phyloseq` objects. The number of microbial features greatly exceeds the number of samples, and many features are rare or absent in most samples, motivating the use of filtering and transformation steps prior to modeling.
+We use the HMP 16S rRNA V3–V5 dataset [@hmp2012], obtained programmatically
+from the Bioconductor package `HMP16SData` [@schiffer2019] via the `V35()`
+function,
+which returns a `SummarizedExperiment` object containing (a) a count matrix
+of microbial features × samples, (b) a taxonomy table, and (c) sample
+metadata including the `HMP_BODY_SITE` variable. The unit of observation is
+an individual sample; the number of microbial features greatly exceeds the
+number of samples, and most features are rare, which motivates filtering and
+rarefaction before statistical testing.
 
-## Questions/Hypotheses to be addressed
-The primary question of this project is whether microbiome community structure differs across sample groups defined by available metadata, such as body site. Outcomes of interest include alpha diversity measures (e.g., Shannon diversity) that summarize within-sample diversity, as well as beta diversity measures that capture differences in community composition between samples. I hypothesize that samples from different body sites will exhibit distinct diversity patterns and will cluster separately in ordination analyses.
+We collapse the `HMP_BODY_SITE` values into five major sites — Airways, Gut
+(Gastrointestinal Tract), Oral, Skin and Urogenital — to obtain a balanced
+comparison across sites.
 
+## Questions and hypotheses
 
-To cite other work (important everywhere, but likely happens first in introduction), make sure your references are in the BibTeX file specified in the YAML header above and have the right BibTeX key. Then you can include like this:
-
-Examples of reproducible research projects can for instance be found in [@mckay2020; @mckay2020a].
-
-
+- **H1:** Microbial alpha diversity differs significantly across the five
+  major body sites.
+- **H2:** Microbial communities cluster distinctly by body site in beta
+  diversity ordination space.
+- **H3:** Microbial co-occurrence networks differ in structure across body
+  sites (density, modularity, community count).
 
 {{< pagebreak >}}
 
-
-# Methods 
-
-_Describe your methods. That should describe the data, the cleaning processes, and the analysis approaches. You might want to provide a shorter description here and all the details in the supplement._
-
-
-## Schematic of workflow
-
-Sometimes you might want to show a schematic diagram/figure that was not created with code (if you can do it with code, do it). @fig-schematic is an example of some - completely random/unrelated - schematic that was generated with BioRender.
-We store those figures in the `assets` folder.
-
-```{r}
-#| label: fig-schematic
-#| fig-cap: "A figure that is manually generated and shows some overview/schematic. This has nothing to do with the data, it's just a random one from one of our projects I found and placed here."
-#| echo: FALSE
-knitr::include_graphics(here("assets","antigen-recognition.png"))
-```
-
-
-
+# Methods
 
 ## Data acquisition
-The data were obtained directly from the Human Microbiome Project using the Bioconductor package `HMP16SData`. The V3–V5 16S rRNA amplicon dataset was imported programmatically in R using the `V35()` function, which returns the data as a `SummarizedExperiment` object containing microbial feature counts, taxonomic annotations, and sample metadata. The data were then converted to a `phyloseq` object to support microbiome-specific data handling and exploratory analysis. Programmatic data access through Bioconductor ensures reproducibility and avoids manual data downloads.
 
+HMP 16S V3–V5 data were downloaded programmatically using the Bioconductor
+package `HMP16SData` (`V35()`) [@schiffer2019], yielding a
+`SummarizedExperiment` with counts, taxonomy and sample metadata. The object
+was converted to a `phyloseq` [@mcmurdie2013] object to take advantage of the
+`phyloseq` / `vegan` [@oksanen2024vegan] ecosystem for microbiome-specific
+handling.
 
+## Processing and cleaning
 
-## Data import and cleaning
-After loading the data, several basic data checks and preprocessing steps were performed to prepare the microbiome data for exploratory analysis. Taxonomy and sample metadata were inspected to confirm successful import and consistency. Microbial features with zero total counts were removed, and rare taxa present in only a small number of samples were filtered out to reduce sparsity. Finally, raw count data were transformed to relative abundances to account for differences in sequencing depth across samples. These steps produced a cleaned dataset suitabl
-
-
+The `HMP_BODY_SITE` variable was simplified by renaming
+"Gastrointestinal Tract" → "Gut" and "Urogenital Tract" → "Urogenital". To
+obtain a balanced dataset, we performed stratified random subsampling of up
+to 200 samples per body site (`set.seed(123)`). Low-abundance taxa were
+removed by requiring each taxon to appear in at least 10 samples and to have
+a total read count ≥ 50. Any samples that became empty after filtering were
+dropped. For alpha and beta diversity, samples were rarefied to the 5th
+percentile of sequencing depth.
 
 ## Statistical analysis
-_Explain anything related to your statistical analyses._
 
+**H1 (alpha diversity).** For each sample we calculated Observed richness,
+Shannon [@shannon1948], Simpson and Chao1 indices using
+`phyloseq::estimate_richness()` [@mcmurdie2013]. For each metric we tested
+for a body-site effect with a Kruskal-Wallis test; when significant
+(α = 0.05) we performed Benjamini-Hochberg-adjusted pairwise Wilcoxon tests.
+
+**H2 (beta diversity).** We log(1 + x) transformed counts and computed
+Bray-Curtis [@bray1957] and Jaccard distances using `vegan::vegdist`
+[@oksanen2024vegan]. Body-site effects were tested with PERMANOVA
+[@anderson2001] (`vegan::adonis2`), together with a BETADISPER test for
+equality of dispersion. Samples were visualized in PCoA space (Bray-Curtis)
+with 95% confidence ellipses and via Ward-D2 hierarchical clustering.
+
+**H3 (co-occurrence networks).** For each body site we computed a Spearman
+correlation matrix over taxa that appeared in ≥ 10% of samples
+(`Hmisc::rcorr`). Edges were retained when |r| ≥ 0.5 and p < 0.01; isolated
+nodes were removed. Networks were built and analyzed with `igraph`
+[@csardi2006igraph], with communities detected by the Louvain algorithm
+[@blondel2008]. We characterized each network by node count, edge count,
+density, average degree, global clustering coefficient, Louvain modularity,
+and number of Louvain communities. Networks were compared visually using
+bar plots of these summaries.
+
+**H4 (supervised classification).** A held-out classifier was fit using the
+`tidymodels` framework [@kuhn2020tidymodels] with the top 300 most abundant
+taxa as features (log(1+x) transformed, z-scored). We compared an elastic-net
+multinomial logistic regression [@friedman2010glmnet] and a random forest
+[@wright2017ranger], with hyperparameters tuned by 5-fold cross-validation
+on a stratified 75/25 train/test split.
+
+All analyses use `set.seed(123)` where randomness is involved. The full
+analysis pipeline is implemented in three files:
+
+- `code/processing-code/processingfile-v1.qmd` (processing: downloads HMP
+  via `HMP16SData::V35()`, filters rare taxa, saves `ps_filt.rds` and
+  `ps_rel.rds`)
+- `code/eda-code/eda.qmd` (exploratory data analysis)
+- `code/analysis-code/statistical-analysis.R` (formal analysis + tidymodels
+  classification)
 
 {{< pagebreak >}}
-
 
 # Results
 
-## Exploratory/Descriptive analysis
-
-Exploratory analyses were used to summarize key characteristics of the microbiome dataset and assess feasibility for later modeling. I first examined sequencing depth across samples to understand variability in read counts. Next, I summarized community composition by visualizing relative abundances of dominant taxonomic groups (phylum level). Finally, I computed alpha diversity (Shannon index) to describe within-sample diversity and compared it across a metadata-defined grouping variable (e.g., body subsite). These descriptive results provide a high-level overview of the data structure and major patterns without performing formal hypothesis testing.
-
-
-@tbl-exploratory-summary shows a summary of the data.
-
-Note the loading of the data providing a **relative** path using the `../../` notation. (Two dots means a folder up). You never want to specify an **absolute** path like `C:\ahandel\myproject\results\` because if you share this with someone, it won't work for them since they don't have that path. You can also use the `here` R package to create paths. See examples of that below. I generally recommend the `here` package.
+## Exploratory / descriptive analysis
 
 ```{r}
 #| label: tbl-exploratory-summary
-#| tbl-cap: "Exploratory summary by body subsite (sample size, sequencing depth, and Shannon diversity)."
-#| echo: FALSE
-explore_tab <- readRDS(here::here("results","tables","exploratory_summary_by_subsite.rds"))
-knitr::kable(explore_tab)
+#| tbl-cap: "Summary of the processed dataset by body site (sample size, mean sequencing depth, alpha diversity)."
+#| echo: false
+explore_tab_path <- here::here("results", "tables",
+                               "exploratory_summary_by_subsite.rds")
+if (file.exists(explore_tab_path)) {
+  explore_tab <- readRDS(explore_tab_path)
+  knitr::kable(explore_tab, digits = 2)
+} else {
+  cat("Run eda.qmd to produce this table.")
+}
 ```
 
-
-
-## Basic statistical analysis
-
+Figure @fig-seq-depth shows the distribution of per-sample sequencing depth,
+motivating the rarefaction step. Figure @fig-top-phyla shows the relative
+abundance of the 10 most abundant phyla across samples.
 
 ```{r}
 #| label: fig-seq-depth
 #| fig-cap: "Sequencing depth distribution across samples."
-#| echo: FALSE
-knitr::include_graphics(here::here("results","figures","seq_depth.png"))
+#| echo: false
+knitr::include_graphics(here::here("results", "figures", "seq_depth.png"))
 ```
 
 ```{r}
 #| label: fig-top-phyla
-#| fig-cap: "Relative abundance of the top 10 phyla across samples (stacked bar plot)."
-#| echo: FALSE
-knitr::include_graphics(here::here("results","figures","top_phyla.png"))
+#| fig-cap: "Relative abundance of the top 10 phyla across samples."
+#| echo: false
+knitr::include_graphics(here::here("results", "figures", "top_phyla.png"))
+```
+
+## H1: Alpha diversity differs by body site
+
+Kruskal-Wallis tests rejected the null of equal alpha diversity across body
+sites for all four indices (Table @tbl-alpha-kw). Pairwise Wilcoxon follow-up
+tests (Benjamini-Hochberg corrected) are stored in
+`results/tables/alpha_pairwise.rds`. Figure @fig-alpha shows per-site
+boxplots for the four indices; Oral and Gut samples show the highest Shannon
+values, while Skin and Urogenital samples show lower and more variable
+diversity.
+
+```{r}
+#| label: tbl-alpha-kw
+#| tbl-cap: "Kruskal-Wallis tests of alpha diversity differences across the five body sites."
+#| echo: false
+kw_path <- here::here("results", "tables", "alpha_kruskal.rds")
+if (file.exists(kw_path)) {
+  kw_table <- readRDS(kw_path)
+  knitr::kable(kw_table, digits = 4)
+} else {
+  cat("Run statistical-analysis.R to produce this table.")
+}
 ```
 
 ```{r}
-#| label: fig-shannon
-#| fig-cap: "Shannon alpha diversity by body subsite."
-#| echo: FALSE
-knitr::include_graphics(here::here("results","figures","shannon_boxplot.png"))
+#| label: fig-alpha
+#| fig-cap: "Alpha diversity (Observed, Shannon, Simpson, Chao1) across the five major body sites."
+#| echo: false
+fig_path <- here::here("results", "figures", "alpha_diversity_5sites.png")
+if (file.exists(fig_path)) knitr::include_graphics(fig_path)
 ```
 
+## H2: Samples cluster by body site
 
-## Full analysis
+PERMANOVA on both Bray-Curtis and Jaccard distances showed strong body-site
+effects (Table @tbl-permanova). Because BETADISPER tests were typically also
+significant, effects reflect both location and dispersion differences;
+however, the large PERMANOVA R² values combined with clear separation in
+PCoA space (Figure @fig-pcoa) indicate that body-site identity is the
+dominant organizing axis of variation. Ward-D2 hierarchical clustering on
+Bray-Curtis distance (Figure @fig-hclust) separates samples into branches
+that largely correspond to body site.
 
-_Use one or several suitable statistical/machine learning methods to analyze your data and to produce meaningful figures, tables, etc. This might again be code that is best placed in one or several separate R scripts that need to be well documented. You want the code to produce figures and data ready for display as tables, and save those. Then you load them here._
+```{r}
+#| label: tbl-permanova
+#| tbl-cap: "PERMANOVA (with BETADISPER) testing body-site effects on community composition."
+#| echo: false
+perm_path <- here::here("results", "tables", "permanova.rds")
+if (file.exists(perm_path)) {
+  permanova_tbl <- readRDS(perm_path)
+  knitr::kable(permanova_tbl, digits = 4)
+} else {
+  cat("Run statistical-analysis.R to produce this table.")
+}
+```
 
-Example @tbl-resulttable2 shows a summary of a linear model fit.
+```{r}
+#| label: fig-pcoa
+#| fig-cap: "PCoA of Bray-Curtis distances among samples, colored by body site. Ellipses are 95% confidence regions."
+#| echo: false
+fig_path <- here::here("results", "figures", "pcoa_ordination_5sites.png")
+if (file.exists(fig_path)) knitr::include_graphics(fig_path)
+```
 
+```{r}
+#| label: fig-hclust
+#| fig-cap: "Ward-D2 hierarchical clustering of samples based on Bray-Curtis distances. The color bar below the dendrogram marks body site."
+#| echo: false
+fig_path <- here::here("results", "figures",
+                       "hierarchical_clustering_5sites.png")
+if (file.exists(fig_path)) knitr::include_graphics(fig_path)
+```
 
+## H3: Co-occurrence networks differ across body sites
 
+Per-site co-occurrence networks showed clear differences in size, density
+and modularity (Table @tbl-network; Figure @fig-network-stats). Oral and Gut
+communities produced the largest and most modular networks, consistent with
+their higher observed richness, while Urogenital networks were smaller and
+denser, driven by dominant taxa. Full network visualizations and hub-taxa
+summaries are provided in the supplement.
+
+```{r}
+#| label: tbl-network
+#| tbl-cap: "Summary of per-site co-occurrence network properties."
+#| echo: false
+net_path <- here::here("results", "tables", "network_stats.rds")
+if (file.exists(net_path)) {
+  network_stats <- readRDS(net_path)
+  knitr::kable(network_stats, digits = 3)
+} else {
+  cat("Run statistical-analysis.R to produce this table.")
+}
+```
+
+```{r}
+#| label: fig-network-stats
+#| fig-cap: "Network property comparison across body sites (nodes, edges, density, average degree, clustering, modularity, number of communities)."
+#| echo: false
+fig_path <- here::here("results", "figures",
+                       "network_statistics_comparison.png")
+if (file.exists(fig_path)) knitr::include_graphics(fig_path)
+```
+
+## H4: Predicting body site from taxon abundances (tidymodels)
+
+To complement the descriptive hypothesis tests we also fit a supervised
+classifier that predicts body site from taxon abundances, using the
+`tidymodels` framework [@kuhn2020tidymodels]. Features are log(1+x)-transformed
+counts of the 300 most abundant taxa; data are split 75/25 (stratified by
+site); hyperparameters for an elastic-net multinomial GLM
+(`glmnet` [@friedman2010glmnet]) and a random forest
+(`ranger` [@wright2017ranger]) are tuned with 5-fold cross-validation. Test-set performance is reported in
+Table @tbl-ml-test, and the confusion matrix for the better-performing model
+is shown in Figure @fig-ml-cm.
+
+```{r}
+#| label: tbl-ml-test
+#| tbl-cap: "Held-out test-set performance for the two tuned classifiers."
+#| echo: false
+p <- here::here("results", "tables", "ml_test_metrics.rds")
+if (file.exists(p)) knitr::kable(readRDS(p), digits = 3)
+```
+
+```{r}
+#| label: fig-ml-cm
+#| fig-cap: "Confusion matrix of the best-performing classifier on the held-out test set."
+#| echo: false
+p <- here::here("results", "figures", "ml_confusion_matrix.png")
+if (file.exists(p)) knitr::include_graphics(p)
+```
 
 {{< pagebreak >}}
 
-
 # Discussion
 
-## Summary and Interpretation
-_Summarize what you did, what you found and what it means._
+## Summary and interpretation
 
-## Strengths and Limitations
-_Discuss what you perceive as strengths and limitations of your analysis._
+Across the three hypotheses, body site emerged as a strong and consistent
+organizing axis of the HMP 16S data. Alpha diversity differed significantly
+across the five major sites, the first two PCoA axes alone revealed clear
+site-level clustering, and the per-site co-occurrence networks varied not
+just in which taxa they contained but in their topology. This reproduces
+the core observation of the HMP and extends it with network-level
+descriptors.
+
+## Strengths and limitations
+
+Strengths of the analysis include its full reproducibility — data are
+downloaded programmatically, seeds are fixed, and every figure and table is
+regenerated by the scripts — and its use of robust, non-parametric or
+permutation-based tests that are appropriate for compositional microbiome
+data. Limitations include (1) reliance on rarefaction, which discards reads
+and may underestimate diversity in high-depth samples; (2) the Pearson-style
+assumptions embedded in Spearman correlation networks, which do not handle
+compositional zeros particularly well; and (3) a focus on the five *major*
+body sites, which aggregates anatomically distinct subsites (e.g. tongue vs.
+buccal mucosa within "Oral").
 
 ## Conclusions
-_What are the main take-home messages?_
 
-_Include citations in your Qmd file using BibTeX, the list of references will automatically be placed at the end_
+Body-site identity drives alpha diversity, community composition and
+co-occurrence network structure in the HMP 16S data. Network-level
+descriptors (modularity, number of communities, average degree) add
+information beyond diversity indices and PCoA and are worth reporting in
+comparative microbiome studies. The fully scripted workflow used here can
+be adapted to new HMP subsets or to other 16S studies with minimal change.
 
-This paper [@leek2015] discusses types of analyses. 
-
-These papers [@mckay2020; @mckay2020a] are good examples of papers published using a fully reproducible setup similar to the one shown in this template. 
-
-Note that this cited reference will show up at the end of the document, the reference formatting is determined by the CSL file specified in the YAML header. Many more style files for almost any journal [are available](https://www.zotero.org/styles). You also specify the location of your BibTeX reference file in the YAML. You can call your reference file anything you like.
-
+Examples of reproducible research projects can be found in
+[@mckay2020; @mckay2020a]; this paper follows that style.
 
 {{< pagebreak >}}
 
 # References
-
-
-

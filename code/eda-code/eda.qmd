@@ -1,169 +1,249 @@
 ---
-title: "An example exploratory analysis script"
-date: "2024-02-07"
+title: "Exploratory Data Analysis - Human Microbiome Project (5 Body Sites)"
+author: "Kexin Cui"
+date: "2026-04-19"
 output: html_document
 ---
 
-  
-  
-This Quarto file loads the cleaned data and does some exploring.
+# Overview
 
-This version has the code inside the Quarto file itself.
+This Quarto file performs exploratory data analysis (EDA) on a subset of the
+Human Microbiome Project (HMP) 16S rRNA V3–V5 dataset. The goal of the EDA is
+to describe the structure of the processed microbiome data and to give an
+initial look at whether communities differ across the five major body sites
+(Airways, Gut, Oral, Skin, Urogenital). The EDA here motivates the formal
+statistical analyses that are performed in
+`code/analysis-code/statistical-analysis.R`.
 
-Also note that while cleaning and exploring is split here, this is iterative. You saw that as part of the processing, we already had to explore the data somewhat to understand how to clean it. In general, as you explore, you'll find things that need cleaning. As you clean, you can explore more. Therefore, at times it might make more sense to combine the cleaning and exploring code parts into a single R or Quarto file. Or split things in any other logical way.
+The three hypotheses guiding the project are:
 
-As part of the exploratory analysis, you should produce plots or tables or other summary quantities for the most interesting/important quantities in your data. Depending on the total number of variables in your dataset, explore all or some of the others. Figures produced here might be histograms or density plots, correlation plots, etc. Tables might summarize your data.
-
-Start by exploring one variable at a time. Then continue by creating plots or tables of the outcome(s) of interest and the predictor/exposure/input variables you are most interested in. If your dataset is small, you can do that for all variables. 
-
-Plots produced here can be scatterplots, boxplots, violinplots, etc. Tables can be simple 2x2 tables or larger ones.
+- H1: Microbial alpha diversity differs significantly across the five major
+  body sites.
+- H2: Microbial communities cluster distinctly by body site in beta diversity
+  ordination space.
+- H3: Microbial co-occurrence networks differ in structure across body sites
+  (topology, modularity, hub taxa).
 
 # Setup
 
 ```{r}
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
-
-# BiocManager::install("microbiome")
-
+#| message: false
+#| warning: false
 library(tidyverse)
 library(HMP16SData)
 library(phyloseq)
 library(vegan)
-library(microbiome)
 library(here)
 ```
 
-
-Load the data.
-
 ```{r}
-#Path to data. Note the use of the here() package and not absolute paths
-data_location <- here::here("data","processed-data","ps_rel.rds")
-#load data
-mydata <- readRDS(data_location)
+# Consistent colors for the five major body sites
+colors_body <- c(
+  "Airways"    = "#87CEEB",
+  "Gut"        = "#8B4513",
+  "Oral"       = "#DC143C",
+  "Skin"       = "#FFB6C1",
+  "Urogenital" = "#9370DB"
+)
+theme_set(theme_bw(base_size = 12))
 ```
 
+# Load data
 
-
-
-
-
-
-# Data exploration through figures
+We use the processed phyloseq objects saved by the processing step. `ps_filt`
+contains filtered counts and `ps_rel` contains relative abundances.
 
 ```{r}
-ps_filt <- readRDS(here("data","processed-data","ps_filt.rds"))
+ps_filt <- readRDS(here("data", "processed-data", "ps_filt.rds"))
+ps_rel  <- readRDS(here("data", "processed-data", "ps_rel.rds"))
 
-p_seq <- tibble(library_size = sample_sums(ps_filt)) %>%
+# Use the body-site simplification from the processing step. If SampleType
+# is not already available, create it from HMP_BODY_SITE.
+if (!"SampleType" %in% colnames(sample_data(ps_filt))) {
+  sample_data(ps_filt)$SampleType <- sample_data(ps_filt)$HMP_BODY_SITE |>
+    gsub("Gastrointestinal Tract", "Gut", x = _) |>
+    gsub("Urogenital Tract", "Urogenital", x = _)
+  sample_data(ps_rel)$SampleType <- sample_data(ps_filt)$SampleType
+}
+```
+
+# Sequencing depth
+
+Sequencing depth varies substantially across samples, which motivates the
+rarefaction step in the processing pipeline.
+
+```{r}
+p_seq <- tibble(library_size = sample_sums(ps_filt)) |>
   ggplot(aes(x = library_size)) +
-  geom_histogram(bins = 30) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
   labs(x = "Sequencing depth (reads per sample)",
        y = "Number of samples")
 
-ggsave(here("results","figures","seq_depth.png"),
+ggsave(here("results", "figures", "seq_depth.png"),
        p_seq, width = 6, height = 4, dpi = 300)
+p_seq
 ```
 
-Dominant taxa composition (top phyla)
-```{r}
-# Extract relative abundance matrix
-otu <- as(otu_table(mydata), "matrix")
-if (taxa_are_rows(mydata)) otu <- t(otu)
+# Dominant phyla
 
-tax <- as(tax_table(mydata), "matrix")
-phylum <- tax[, "PHYLUM"]
+Stacked bars of the 10 most abundant phyla show that community composition is
+dominated by a small set of phyla that vary across samples — consistent with
+previously described HMP patterns.
+
+```{r}
+otu <- as(otu_table(ps_rel), "matrix")
+if (taxa_are_rows(ps_rel)) otu <- t(otu)
+
+tax <- as(tax_table(ps_rel), "matrix")
+phylum_col <- if ("Phylum" %in% colnames(tax)) "Phylum" else "PHYLUM"
+phylum <- tax[, phylum_col]
 phylum[is.na(phylum) | phylum == ""] <- "UNASSIGNED"
 
-otu_phylum <- rowsum(t(otu), group = phylum)
-otu_phylum <- t(otu_phylum)
+otu_phylum <- t(rowsum(t(otu), group = phylum))
 
 df <- as_tibble(otu_phylum, rownames = "SampleID") |>
-  pivot_longer(-SampleID, names_to = "PHYLUM", values_to = "RelAbund")
+  pivot_longer(-SampleID, names_to = "Phylum", values_to = "RelAbund")
 
 top10 <- df |>
-  group_by(PHYLUM) |>
+  group_by(Phylum) |>
   summarize(total = sum(RelAbund), .groups = "drop") |>
   slice_max(total, n = 10) |>
-  pull(PHYLUM)
+  pull(Phylum)
 
 p_phylum <- df |>
-  filter(PHYLUM %in% top10) |>
-  ggplot(aes(SampleID, RelAbund, fill = PHYLUM)) +
+  filter(Phylum %in% top10) |>
+  ggplot(aes(SampleID, RelAbund, fill = Phylum)) +
   geom_col() +
   theme(axis.text.x = element_blank(),
         axis.ticks.x = element_blank()) +
   labs(x = "Samples", y = "Relative abundance")
 
-ggsave(
-  filename = here("results","figures","top_phyla.png"),
-  plot = p_phylum,
-  width = 8,
-  height = 4,
-  dpi = 300
-)
+ggsave(here("results", "figures", "top_phyla.png"),
+       p_phylum, width = 8, height = 4, dpi = 300)
+p_phylum
 ```
 
-Relative abundances of dominant bacterial phyla varied substantially across samples, indicating heterogeneous community composition typical of human microbiome data.
+# Alpha diversity across the five body sites (H1)
 
-Alpha diversity (Shannon) + boxplot by group
+We compute four alpha diversity indices (Observed richness, Shannon, Simpson,
+Chao1) on the filtered counts and test for differences across body sites using
+non-parametric Kruskal-Wallis tests. Boxplots summarize within-site diversity.
+
 ```{r}
-alpha <- estimate_richness(mydata, measures = "Shannon") %>%
-  rownames_to_column("SampleID")
-
-meta <- as(sample_data(mydata), "data.frame") %>%
-  rownames_to_column("SampleID")
-
-df_alpha <- left_join(alpha, meta, by = "SampleID")
-
-GROUP_VAR <- "HMP_BODY_SUBSITE"
-
-p_alpha <- df_alpha %>%
-  ggplot(aes(x = .data[[GROUP_VAR]], y = Shannon)) +
-  geom_boxplot() +
-  labs(x = GROUP_VAR, y = "Shannon diversity") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-ggsave(
-  filename = here("results","figures","shannon_boxplot.png"),
-  plot = p_alpha,
-  width = 7,
-  height = 4,
-  dpi = 300
+# Alpha diversity should be calculated on integer counts
+alpha_div <- estimate_richness(
+  ps_filt,
+  measures = c("Observed", "Shannon", "Simpson", "Chao1")
 )
+alpha_div$SampleType <- sample_data(ps_filt)$SampleType
+
+metrics <- c("Observed", "Shannon", "Simpson", "Chao1")
+kw_results <- map_dfr(metrics, function(m) {
+  kw <- kruskal.test(as.formula(paste(m, "~ SampleType")), data = alpha_div)
+  tibble(Metric = m,
+         ChiSq  = unname(kw$statistic),
+         df     = unname(kw$parameter),
+         p      = kw$p.value)
+})
+
+kw_results
 ```
 
-# Data exploration through tables
+```{r}
+alpha_long <- alpha_div |>
+  pivot_longer(all_of(metrics), names_to = "Metric", values_to = "Value")
+
+p_alpha <- ggplot(alpha_long,
+                  aes(x = SampleType, y = Value, fill = SampleType)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.2, alpha = 0.4, size = 1) +
+  facet_wrap(~Metric, scales = "free_y", ncol = 2) +
+  scale_fill_manual(values = colors_body) +
+  labs(title = "Alpha diversity across five major body sites",
+       x = "Body Site", y = "Diversity value") +
+  theme(legend.position = "bottom",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(here("results", "figures", "alpha_diversity_5sites.png"),
+       p_alpha, width = 10, height = 8, dpi = 300)
+p_alpha
+```
+
+The Shannon boxplot alone (kept from the earlier version for comparison):
 
 ```{r}
-GROUP_VAR <- "HMP_BODY_SUBSITE"
+p_shannon <- alpha_div |>
+  ggplot(aes(x = SampleType, y = Shannon, fill = SampleType)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = colors_body) +
+  labs(x = "Body Site", y = "Shannon diversity") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1))
 
-explore_tab <- df_alpha %>%
-  mutate(
-    library_size = sample_sums(mydata)[SampleID],
-    group = .data[[GROUP_VAR]]
-  ) %>%
-  group_by(group) %>%
+ggsave(here("results", "figures", "shannon_boxplot.png"),
+       p_shannon, width = 7, height = 4, dpi = 300)
+p_shannon
+```
+
+# Beta diversity / ordination (H2, preview)
+
+As a preview of the formal PERMANOVA analysis in `statistical-analysis.R`, we
+run a PCoA on log(1+x)-transformed counts with Bray-Curtis distance.
+
+```{r}
+ps_log <- transform_sample_counts(ps_filt, function(x) log(1 + x))
+ord_bc <- ordinate(ps_log, method = "PCoA", distance = "bray")
+evals <- ord_bc$values$Eigenvalues
+var1  <- round(100 * evals[1] / sum(evals), 1)
+var2  <- round(100 * evals[2] / sum(evals), 1)
+
+ord_df <- data.frame(ord_bc$vectors[, 1:2])
+ord_df$SampleType <- sample_data(ps_log)$SampleType
+
+p_pcoa <- ggplot(ord_df, aes(Axis.1, Axis.2, color = SampleType)) +
+  geom_point(size = 2, alpha = 0.7) +
+  stat_ellipse(level = 0.95, linewidth = 1) +
+  scale_color_manual(values = colors_body) +
+  labs(x = sprintf("PC1 (%.1f%%)", var1),
+       y = sprintf("PC2 (%.1f%%)", var2),
+       color = "Body Site",
+       title = "PCoA (Bray-Curtis) - preview")
+
+ggsave(here("results", "figures", "pcoa_preview.png"),
+       p_pcoa, width = 8, height = 6, dpi = 300)
+p_pcoa
+```
+
+# Summary table by body site
+
+```{r}
+explore_tab <- alpha_div |>
+  rownames_to_column("SampleID") |>
+  mutate(library_size = sample_sums(ps_filt)[SampleID]) |>
+  group_by(SampleType) |>
   summarize(
-    n_samples = n(),
+    n_samples         = n(),
     mean_library_size = mean(library_size, na.rm = TRUE),
-    mean_shannon = mean(Shannon, na.rm = TRUE),
-    sd_shannon = sd(Shannon, na.rm = TRUE),
+    mean_observed     = mean(Observed,     na.rm = TRUE),
+    mean_shannon      = mean(Shannon,      na.rm = TRUE),
+    sd_shannon        = sd(Shannon,        na.rm = TRUE),
+    mean_simpson      = mean(Simpson,      na.rm = TRUE),
     .groups = "drop"
   )
 
-# save only as RDS
-saveRDS(
-  explore_tab,
-  file = here("results","tables","exploratory_summary_by_subsite.rds")
-)
+saveRDS(explore_tab,
+        here("results", "tables", "exploratory_summary_by_subsite.rds"))
+explore_tab
 ```
 
+# Take-aways from EDA
 
-
-# Notes
-
-For your own explorations, tables and figures can be "quick and dirty". As long as you can see what's going on, there is no need to polish them. That's in contrast to figures you'll produce for your final products (paper, report, presentation, website, etc.). Those should look as nice, polished and easy to understand as possible.
-
-
+- Sequencing depth is variable; rarefaction in the processing step normalizes
+  depth before downstream analyses.
+- A small number of phyla dominate the community, with visible between-sample
+  differences that track body site.
+- Alpha diversity boxplots show clear visual separation across the five major
+  body sites, and Kruskal-Wallis tests above will quantify this in H1.
+- The PCoA preview shows samples tending to cluster by body site, motivating
+  the formal PERMANOVA in `statistical-analysis.R` (H2).
+- Network construction (H3) is performed per body site in the analysis script.

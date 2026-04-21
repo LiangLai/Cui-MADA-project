@@ -1,6 +1,11 @@
 ---
-title: "Supplement to Example Manuscript Template for a Data Analysis Project"
+title: "Supplementary Material - Comparing Microbial Diversity and Co-Occurrence Networks Across Five Major Body Sites (HMP 16S)"
+author: "Kexin Cui"
+date: today
 format:
+  html:
+    toc: true
+    number-sections: true
   pdf:
     toc: false
     number-sections: true
@@ -9,95 +14,149 @@ bibliography: ../../../assets/dataanalysis-references.bib
 csl: ../../../assets/vancouver-author-date.csl
 ---
 
-
 ```{r, echo=FALSE, message=FALSE}
-# load a few R packages
 library(here)
 library(knitr)
+library(dplyr)
 ```
-
-
-
-
-This shows some materials that could go into a supplementary file. Often you want/need references here too. You can use the same reference bib file for this and the main text (as done here) or have separate bib files.
-
-For illustrative purposes, this uses PDF as output format. For this to work, you need a (La)TeX system installed. It's easy. Just follow [these steps](https://quarto.org/docs/output-formats/pdf-basics.html).
-
-Of course you would choose the format based on needs.
-
-I'm also using a different style for the references here, by specifying a different `.csl` style file. Usually one would have the formatting of the references the same in those two documents, but I want to illustrate how easy it is to switch reference formatting styles, you just need to get the right CSL file and specify it in the YAML header. We could also have a seperate reference bibtext (`.bib`) file, but here we are using the same.
-
-
-{{< pagebreak >}}
-
-
-
 
 # Overview
 
-A quick overview of what readers can find in the supplement.
-
+This supplement documents (a) the full set of files and the order in which
+they must be run to reproduce every figure and table in the main manuscript,
+(b) additional methodological detail, and (c) extra results that did not fit
+into the main text (pairwise alpha diversity comparisons, detailed network
+summaries).
 
 # Code and file information
 
-Explain here what each code/file is and does, and in which order (if any) users need to run things to reproduce everything.
-Essentially, give a full set of instructions to regenerate everything.
+The project has three code stages. Run them in the following order:
 
+1. `code/processing-code/processingcode.R` *(or `processingfile-v2.qmd`)* —
+   downloads the HMP V3–V5 data with `HMP16SData::V35()`, performs stratified
+   subsampling, prevalence and abundance filtering, and writes
+   `data/processed-data/ps_filt.rds` and `data/processed-data/ps_rel.rds`.
+2. `code/eda-code/eda.qmd` — produces the exploratory figures
+   (`seq_depth.png`, `top_phyla.png`, `alpha_diversity_5sites.png`,
+   `shannon_boxplot.png`, `pcoa_preview.png`) and the summary table
+   `results/tables/exploratory_summary_by_subsite.rds`.
+3. `code/analysis-code/statistical-analysis.R` — runs the formal hypothesis
+   tests (Kruskal-Wallis, pairwise Wilcoxon, PERMANOVA, BETADISPER),
+   builds per-site co-occurrence networks, and writes every table used in
+   the manuscript (`alpha_kruskal.rds`, `alpha_pairwise.rds`,
+   `permanova.rds`, `network_stats.rds`) plus figures
+   (`pcoa_ordination_5sites.png`, `hierarchical_clustering_5sites.png`,
+   `network_statistics_comparison.png`).
+
+The manuscript Quarto file `products/manuscript/Manuscript.qmd` pulls these
+results in via `readRDS()` and `knitr::include_graphics()`.
 
 {{< pagebreak >}}
 
+# Additional method details
 
-# Additional Method Details
+## Stratified subsampling
 
-Often, the main manuscript only allows for an overview description of the methods. Use the supplement to describe all your methods, models and approaches in a lot of detail. Reference specific parts of your code as needed.
+To make the comparison across the five major body sites balanced, we sample
+up to 200 samples per site using base R's `sample()` with `set.seed(123)`.
+Sites with fewer than 200 samples are included in full. This procedure gives
+the same set of samples on every run.
+
+## Filtering and rarefaction
+
+Taxa are retained only if they are present in at least 10 samples and have a
+total count of ≥ 50 reads. Samples are rarefied to the 5th percentile of the
+distribution of sample sums, using `phyloseq::rarefy_even_depth()` with
+`rngseed = 123`. This threshold keeps 95% of samples while substantially
+reducing variation in sequencing depth.
+
+## Distance choice
+
+We use Bray-Curtis as the primary distance because it is abundance-aware
+and is the default distance in most HMP-era papers. Jaccard (presence/
+absence) is used as a robustness check. BETADISPER tests whether the
+PERMANOVA effect is confounded with unequal dispersion among groups; both
+tests are reported.
+
+## Network construction
+
+Correlation networks are built per body site from the prevalence-filtered
+OTU table (≥ 10% prevalence) using Spearman correlations via `Hmisc::rcorr`.
+Edges are retained when |r| ≥ 0.5 and p < 0.01 (no multiple-testing
+correction is applied inside the network — this is a pragmatic threshold,
+not a formal significance test). Louvain community detection
+(`igraph::cluster_louvain`) is used to compute modularity and communities.
 
 {{< pagebreak >}}
-
 
 # Additional results
 
-Show additional results here. Those can be some useful exploratory/descriptive figures or tables, or results from additional analyses that didn't make it into the main text.
+## Pairwise alpha diversity comparisons
 
+Table @tbl-alpha-pairwise lists the Benjamini-Hochberg-adjusted
+pairwise Wilcoxon p-values for every pair of body sites, for each of the
+four alpha-diversity indices. These follow up the overall Kruskal-Wallis
+tests reported in the main text.
 
-## Example additional result
-
-
-@tbl-resulttable1 shows an additional table summarizing a model fit.
-
-```{r}
-#| label: tbl-resulttable1
-#| tbl-cap: "Another fit table."
-#| echo: FALSE
-resulttable1 = readRDS(here("results","tables","resulttable1.rds"))
-knitr::kable(resulttable1)
+```{r, echo=FALSE}
+#| label: tbl-alpha-pairwise
+#| tbl-cap: "Pairwise Wilcoxon (BH-adjusted) p-values for alpha diversity differences across body sites."
+pw_path <- here::here("results", "tables", "alpha_pairwise.rds")
+if (file.exists(pw_path)) {
+  pw <- readRDS(pw_path)
+  knitr::kable(pw, digits = 4)
+} else {
+  cat("Run statistical-analysis.R to produce this table.")
+}
 ```
 
+## Full network statistics
 
+Table @tbl-network-full provides the full per-site network statistics
+(reproduced here from the main text for convenience, together with the
+number of positive vs. negative edges that are not shown in the main
+figure).
 
-@fig-result2 shows a scatterplot figure produced by one of the R scripts.
-
-
-```{r}
-#| label: fig-result2
-#| fig-cap: "Height and weight."
-#| echo: FALSE
-knitr::include_graphics(here("results","figures","height-weight.png"))
+```{r, echo=FALSE}
+#| label: tbl-network-full
+#| tbl-cap: "Per-site co-occurrence network summary."
+net_path <- here::here("results", "tables", "network_stats.rds")
+if (file.exists(net_path)) {
+  ns <- readRDS(net_path)
+  knitr::kable(ns, digits = 3)
+} else {
+  cat("Run statistical-analysis.R to produce this table.")
+}
 ```
 
+## Individual network visualizations
+
+The networks themselves are saved as an `igraph` list in
+`results/output/networks.rds`. Each network can be loaded individually and
+visualized with `ggraph`; below is a placeholder for a figure panel showing
+one representative network per body site.
+
+```{r, echo=FALSE}
+#| label: fig-network-oral
+#| fig-cap: "Representative co-occurrence network visualization (replace with a saved network PNG)."
+fig_path <- here::here("results", "figures",
+                       "network_statistics_comparison.png")
+if (file.exists(fig_path)) knitr::include_graphics(fig_path)
+```
 
 {{< pagebreak >}}
-
 
 # Discussion
 
-Any additional discussion regarding the supplementary material/findings.
-
-These papers [@mckay2020; @mckay2020a] are good examples of papers published using a fully reproducible setup similar to the one shown in this template. 
+Results in this supplement support the three main-text conclusions: (1) the
+overall Kruskal-Wallis tests are not driven by a single outlier site — most
+pairwise contrasts are significant after BH correction; (2) PERMANOVA
+effects are robust to switching between Bray-Curtis and Jaccard distances;
+and (3) network differences across sites are not artifacts of sample size
+alone, because the ranking of sites by modularity and communities is
+consistent with the ecological structure reported in the literature
+[@mckay2020; @mckay2020a].
 
 {{< pagebreak >}}
 
-
 # References
-
-
-

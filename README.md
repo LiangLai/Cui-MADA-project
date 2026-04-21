@@ -1,69 +1,121 @@
+# Cui MADA Project — HMP 16S Microbiome Analysis Across Five Major Body Sites
 
-## This is Cassie's MADA class project repository
+This repository contains the full data-analysis project for the MADA course.
+The project uses 16S rRNA V3–V5 data from the Human Microbiome Project (HMP)
+and tests whether alpha diversity, community composition, and microbial
+co-occurrence network structure differ across five major body sites:
+Airways, Gut, Oral, Skin and Urogenital.
 
+Main research questions:
 
-# Overview
+- **H1** — Alpha diversity differs across the five body sites.
+- **H2** — Samples cluster by body site in beta-diversity ordination space.
+- **H3** — Co-occurrence networks differ in structure across body sites.
 
-A template file and folder structure for a data analysis project/paper done with R/Quarto/GitHub. Other components (e.g., other programming languages) can be added as needed. 
+## Repository structure
 
+```
+Cui-MADA-project/
+├── assets/                       # Bibliography, CSL, schematics
+├── code/
+│   ├── processing-code/          # HMP data download + cleaning (step 1)
+│   ├── eda-code/                 # Exploratory data analysis (step 2)
+│   └── analysis-code/            # Formal stats + networks (step 3)
+├── data/
+│   ├── raw-data/                 # Inputs (HMP is downloaded at runtime)
+│   └── processed-data/           # ps_filt.rds, ps_rel.rds
+├── products/
+│   ├── manuscript/               # Manuscript.qmd + supplement
+│   ├── report/                   # HTML report
+│   ├── presentation/             # Slides
+│   └── poster/                   # Poster
+└── results/
+    ├── figures/                  # All figures used in the manuscript
+    ├── tables/                   # All tables used in the manuscript (RDS)
+    └── output/                   # Larger intermediate objects (networks)
+```
 
-# Pre-requisites
+## Prerequisites
 
-This is a template for a data analysis project using R, Quarto, GitHub and a reference manager that can handle BibTeX. Our recommendation for the reference manager is Zotero, with the Better BibTeX plugin/extension. It is also assumed that you have a word processor installed (e.g. MS Word or [LibreOffice](https://www.libreoffice.org/)). You need that software stack to make use of this template. To produce PDF output, you need a TeX distribution installed. You can use TinyTeX, following [these instructions.](https://quarto.org/docs/output-formats/pdf-basics.html)
+- R ≥ 4.3 and Quarto
+- The following R packages (CRAN + Bioconductor):
 
+  ```r
+  install.packages(c(
+    "tidyverse", "here", "broom", "vegan", "igraph", "ggraph",
+    "tidygraph", "Hmisc", "RColorBrewer", "skimr", "readxl",
+    "knitr", "rmarkdown"
+  ))
 
-# Template structure and content
+  if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+  BiocManager::install(c(
+    "phyloseq", "HMP16SData", "SummarizedExperiment", "microbiome"
+  ))
+  ```
 
-The template comes with a folder structure and example files to illustrate the kinds of content you would place in the different folders. The following is a brief description of the contents. See the `readme` files in each folder for more details.
+## Reproduction instructions
 
-* The `assets` folder contains files that are manually generated schematics/diagrams, BibTeX files, CSL style files, PDFs of references, and other such content. Basically add anything that needs to be part of your project but that doesn't fit into the other categories.
+Run the following three steps in order. Each step writes its outputs to
+`data/processed-data/` or `results/`. The working directory is set
+automatically by the `here` package so commands can be run from anywhere in
+the project.
 
-* All code goes into the `code` folder and subfolders. Currently, there are 3 sub-folders that do different parts of an analysis. You can re-organize such that it makes most sense for your project. The folders contain small example files that do some data cleaning and analysis to illustrate the overall setup and workflow. See the readme files in those folders for details.
+1. **Processing** — downloads the HMP V3–V5 data via `HMP16SData::V35()`,
+   converts it to a `phyloseq` object, removes zero-count taxa, filters
+   rare taxa (present in ≤ 5 samples), transforms to relative abundance,
+   and writes `data/processed-data/ps_filt.rds` and
+   `data/processed-data/ps_rel.rds`:
 
-* All data goes into the `data` folder and subfolders. Currently, there are 2 sub-folders that contain different versions of a simple example data set. You can re-organize such that it makes most sense for your project. 
+   ```r
+   quarto::quarto_render(
+     here::here("code", "processing-code", "processingfile-v1.qmd"))
+   ```
 
-* The `products` folder and its subfolders should contain all _deliverables_, such as reports, manuscripts, presentations, posters, Shiny web apps, etc. Those should generally be made with Quarto/R. As needed, other formats can be used. A few examples are provided.
-  - The  `manuscript` subfolder contains a template for a report written as Quarto file. If you access this repository as part of the [Modern Applied Data Science course](https://andreashandel.github.io/MADAcourse/), the sections are guides for your project. If you found your way to this repository outside the course, you might only be interested in seeing how the file pulls in results and references and generates a word document as output, without paying attention to the detailed structure. There is also a sub-folder containing an example for a supplementary material file.
-  - The `poster` subfolder is a placeholder for a future Quarto based poster. See more comments in that readme. 
-  - The `report` subfolder contains an example of an HTML-formatted report. It's basically the same as the manuscript, but a different output format.
-  - The `presentation` subfolder contains a basic example of slides made with Quarto.
-  
+2. **Exploratory data analysis** — renders sequencing-depth, top-phyla,
+   alpha-diversity and PCoA-preview figures, and writes the
+   `exploratory_summary_by_subsite.rds` table:
 
-* The `results` folder should contain all automatically/code generated output. This includes figures, tables, results from analyses that are later used in figures or tables, and other outputs. It is generally recommended to save objects, including tables, as serialized R data (`.Rds`) files. Other formats, e.g. `.csv` for tables, can be useful for use downstream and should be used as needed. All content in these folders should be automatically generated by code. Manually generated results should be avoided as much as possible. If absolutely necessary, they go into the `assets` folder.
+   ```r
+   quarto::quarto_render(here::here("code", "eda-code", "eda.qmd"))
+   ```
 
+3. **Formal statistical analysis** — runs Kruskal-Wallis + pairwise
+   Wilcoxon for alpha diversity, PERMANOVA + BETADISPER for beta diversity,
+   and builds per-site co-occurrence networks. Writes all tables and
+   figures used in the manuscript:
 
-* There are multiple special files in the repo.
-  * `readme.md`: this file contains instructions or details about the folder it
-  is located in. You are reading the project-level `readme.md` file right now. There is a `readme` in almost every folder.
-  * `data-analysis-template.Rproj` is a file that tells RStudio that this is the main folder for a project. Rename if you want.
-  * a few "hidden" files and folders (they start with a `.` and depending on how your OS is configured, you might not see them). You can probably ignore them.
+   ```r
+   source(here::here("code", "analysis-code", "statistical-analysis.R"))
+   ```
 
+4. **Manuscript and supplement** — rendering these files pulls in the
+   saved tables and figures:
 
+   ```r
+   quarto::quarto_render(
+     here::here("products", "manuscript", "Manuscript.qmd"))
+   quarto::quarto_render(
+     here::here("products", "manuscript", "supplement",
+                "Supplementary-Material.qmd"))
+   ```
 
+## File conventions
 
-# Naming conventions
+- Lower-case names with `-` as the word separator.
+- R scripts end in `.R`; Quarto files in `.qmd`.
+- Tables are saved as `.rds`; figures as `.png`.
+- All randomness uses `set.seed(123)` for reproducibility.
 
-We try to follow these naming conventions for folders and files: 
+## Data
 
-* Somewhat descriptive and easy to understand names.
-* Only lower-case letters (and numbers if needed). Words separated by a `-`. 
+The primary input is the HMP 16S V3–V5 dataset obtained at runtime via
+`HMP16SData::V35()`. No raw files need to be stored in the repository; the
+download is reproducible and checked against the package version. The small
+`exampledata.xlsx` under `data/raw-data/` is left over from the template and
+is not used in this analysis.
 
-For instance there is a folder called `analysis-code` with a file called `statistical-analysis.R` in it. We don't use `_` or blank spaces for separators. We also don't use CamelCase, only lower-case. Exceptions are made for standard file names or endings, for instance R scripts end in `.R` (instead of `.r`).
+## Citations
 
-
-# Package management
-
-The package [renv](https://rstudio.github.io/renv/index.html) helps to  manage R packages and increase chances of future reproducibility. Unfortunately, it creates some extra complexity and causes sometimes problems, especially for packages that are not on CRAN.
-
-You can decide to implement `renv` or not. This can happen at any stage, though earlier in the project is generally better.
-
-If you plan to use `renv`, start by reading [the introduction to `renv` article](https://rstudio.github.io/renv/articles/renv.html) so you know how to use it.
-
-
-# Getting started
-
-This is a GitHub template repository. The best way to get it and start using it is [by following these steps.](https://help.github.com/en/articles/creating-a-repository-from-a-template)
-
-Once you got the repository, you can check out the examples by executing them in order. First run the processing code, which will produce the processed data. Then run the EDA scripts and analysis scripts, which will take the processed data and produce some results. 
-
-Once you (re-)generated the results, you can explore the products. Those Quarto files pull in the generated results and display them. These files also pull in references from the `BibTeX` file and format them according to the CSL style.
+Example reproducible projects referenced here include McKay et al.
+(2020a, 2020b); see `assets/dataanalysis-references.bib`.
