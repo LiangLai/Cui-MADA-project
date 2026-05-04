@@ -1,0 +1,137 @@
+---
+title: Project Review
+author: Liang Lai
+date: 2026-05-03
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+---
+
+# Overview
+
+Title of project: Comparing Microbial Diversity and Co-Occurrence Networks Across Five Major Body Sites in the Human Microbiome Project
+
+Name of project author(s): Kexin Cui
+
+Name of project reviewer: Liang Lai
+
+# Specific project content evaluation
+
+## Background, Context and Motivation
+
+### Feedback and Comments
+
+The background is clear overall. The introduction explains the role of 16S rRNA data in microbiome research, introduces the HMP data source, and cites relevant prior work and analysis tools. The H1-H3 hypotheses also follow naturally from the background. One framing issue is that H4, the supervised classification analysis, is not introduced in the introduction or listed with the main hypotheses, so it feels somewhat added later.
+
+### Summary assessment
+
+* strong contextualization and motivation
+
+## Question description
+
+### Feedback and Comments
+
+The main questions are easy to understand and match the data well. H1, H2, and H3 connect clearly to alpha diversity, beta diversity, and network structure. As mentioned above, the machine-learning part is interesting, but it is not framed as one of the main research questions at the beginning, so I was not sure at first whether it was meant to be a fourth hypothesis or just an extra exploratory analysis.
+
+### Summary assessment
+
+* question/hypotheses somewhat explained
+
+## Data description
+
+### Feedback and Comments
+
+The data source is described well. The project explains that the data come from the HMP 16S V3-V5 dataset through the `HMP16SData` package, and the manuscript gives a useful overview of the count matrix, taxonomy table, and sample metadata. I think the data description would be even stronger with a short codebook explanation of the key metadata variables used in the project, especially `HMP_BODY_SITE`, `HMP_BODY_SUBSITE`, and the created `SampleType` variable. It would also help to report the final sample sizes per major body site after filtering and subsampling.
+
+### Summary assessment
+
+* source and overall structure of data somewhat explained
+
+## Data wrangling and exploratory analysis
+
+### Feedback and Comments
+
+The overall processing plan makes sense: the data are downloaded through code, converted to a `phyloseq` object, filtered, transformed, and saved for later analyses. The EDA figures are useful, especially the sequencing depth, top phyla, alpha diversity, and ordination plots. However, some saved or rendered outputs seem out of sync with the current manuscript. For example, the exploratory summary table shown in the manuscript appears to summarize 18 body subsites rather than the five major body sites, and the mean library size values are all 1. This may come from an older EDA output or from using relative abundance instead of count data for that summary. I would recommend re-running and checking this part carefully.
+
+### Summary assessment
+
+* some weaknesses in wrangling and exploratory component
+
+## Appropriateness of Analysis
+
+### Feedback and Comments
+
+The main statistical methods are appropriate for the project questions. Kruskal-Wallis and pairwise Wilcoxon tests are reasonable for alpha diversity, and PERMANOVA with BETADISPER is a good choice for testing body-site differences in community composition. The network analysis is also a useful addition.
+
+### Summary assessment
+
+* strong and reasonable analysis
+
+## Presentation
+
+### Feedback and Comments
+
+The manuscript is organized clearly, and the main figures and tables are generally easy to follow. The alpha diversity, PCoA, and network summary figures all support the main story. Some result statements should be checked against the saved output files. For example, the saved PERMANOVA table reports Bray-Curtis R2 around 0.234 rather than the 0.3-0.5 range stated in the abstract.
+
+### Summary assessment
+
+* results are presented ok, with room for improvement
+
+## Discussion/Conclusions
+
+### Feedback and Comments
+
+The discussion does a good job summarizing the main findings and naming important limitations, including rarefaction, correlation-network assumptions, and grouping many subsites into five broad body-site categories. The conclusions are mostly supported by the analyses. 
+
+### Summary assessment
+
+* strong, complete and clear discussion
+
+## Further comments
+
+Overall, this is a strong project with a clear scientific direction. The biggest improvements would be cleaning out old template files, making sure the README and supplement give the same reproduction instructions, and checking that all manuscript claims match the saved output files.
+
+# Overall project content evaluation
+
+## Structure
+
+### Feedback and Comments
+
+The main folder structure is clear, with separate folders for code, data, products, and results. However, there are still several unrelated template files and example outputs, such as the height/weight analysis files. These make the repository harder to review because it is not always obvious which files are part of the final HMP project and which files are leftovers from the template.
+
+### Summary assessment
+
+* mostly clear, but some confusing parts (e.g. useless files, things in the wrong folders)
+
+## Documentation
+
+### Feedback and Comments
+
+The README gives a useful overview of how to reproduce the project, and the main analysis script has helpful comments. Still, the documentation is not fully consistent across files. For example, the README points to `processingfile-v1.qmd`, while the supplement points to `processingcode.R` or `processingfile-v2.qmd`, and those do not all appear to describe the same HMP workflow. Some folder README files also still contain generic template text.
+
+### Summary assessment
+
+* decently documented with some gaps
+
+## Reproducibility
+
+### Feedback and Comments
+
+The project is designed to be reproducible, especially because the main data are downloaded through code and seeds are set. When I tried to check the workflow, I ran into some environment/package setup issues before I could fully reproduce everything end-to-end. This may partly be a local setup problem.
+
+### Summary assessment
+
+* small parts not reproducible or required manual intervention
+
+## Thoroughness
+
+### Feedback and Comments
+
+The project is fairly thorough and uses several complementary analyses, including diversity tests, ordination, network summaries, and classification. This gives a broad view of body-site differences in the HMP data. The main thing I would add is more explanation of why certain choices were made, such as the rarefaction approach.
+
+### Summary assessment
+
+* decent level of thoroughness
+
